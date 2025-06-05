@@ -13,16 +13,19 @@ options.add_argument('--headless')
 options.add_argument('--no-sandbox')
 options.add_argument('--disable-dev-shm-usage')
 
-# Ubuntu の「chromium-browser」がインストールされている場合
-options.binary_location = "/usr/bin/chromium-browser"
+# 環境変数 CHROME_BINARY が指定されていればそれを使用し、
+# なければ従来のパスを利用する
+options.binary_location = os.environ.get('CHROME_BINARY', '/usr/bin/chromium-browser')
 
-# もし「google-chrome-stable」を自前でインストールした場合は
-# options.binary_location = "/usr/bin/google-chrome-stable"
+from selenium.webdriver.chrome.service import Service
 
-# さらに、PATH 上の chromedriver を直接指定したい場合は
-# driver = webdriver.Chrome(executable_path="/usr/bin/chromedriver", options=options)
-
-driver = webdriver.Chrome(options=options)
+# CHROMEDRIVER 環境変数にドライバのパスが指定されている場合はそれを使用する
+chromedriver_path = os.environ.get('CHROMEDRIVER')
+if chromedriver_path:
+    service = Service(chromedriver_path)
+    driver = webdriver.Chrome(service=service, options=options)
+else:
+    driver = webdriver.Chrome(options=options)
 driver.implicitly_wait(5)
 
 # 以下は元々のスクレイピングロジックです
