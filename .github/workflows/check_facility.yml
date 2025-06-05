@@ -34,14 +34,12 @@ jobs:
       #       互換性の面でバージョンを合わせづらいので、公式の Chrome＋対応ドライバを入れるのが確実です。
       #
       - name: Google Chrome をインストール
+        id: setup-chrome
         uses: browser-actions/setup-chrome@v1
         with:
           chrome-version: 'latest'   # もしくは 'stable' など
-
-      - name: Chromedriver をインストール（Chrome と同じバージョン）
-        uses: browser-actions/setup-chromedriver@v2
-        with:
-          chrome-version: 'latest'   # 上記と同じバージョンを指定
+          install-dependencies: true
+          install-chromedriver: true
 
       # 4. Python ライブラリをインストール
       - name: 依存ライブラリをインストール
@@ -59,6 +57,9 @@ jobs:
       - name: 空き状況チェックスクリプトを実行
         run: |
           python check_availability.py
+        env:
+          CHROME_BINARY: ${{ steps.setup-chrome.outputs.chrome-path }}
+          CHROMEDRIVER: ${{ steps.setup-chrome.outputs.chromedriver-path }}
 
       # 7. last_message.txt に変更があればコミット＆プッシュ
       - name: 変更があれば last_message.txt をコミットしてプッシュ
