@@ -1,22 +1,32 @@
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
 import os
 import time
-from selenium import webdriver
 from selenium.webdriver.common.by import By
-from selenium.webdriver.chrome.options import Options
 from datetime import datetime, timedelta
-from dateutil.relativedelta import relativedelta 
+from dateutil.relativedelta import relativedelta
 import requests
 
-# ──（以下、もとのロジック）───────────────────────────────────────
-# Chrome をヘッドレスモードで起動する例。GitHub Actions 環境で画面なしで動くようにする。
+# ── ChromeOptions で「バイナリパス」を指定する例 ───────────────────────────
 options = Options()
 options.add_argument('--headless')
 options.add_argument('--no-sandbox')
 options.add_argument('--disable-dev-shm-usage')
+
+# Ubuntu の「chromium-browser」がインストールされている場合
+options.binary_location = "/usr/bin/chromium-browser"
+
+# もし「google-chrome-stable」を自前でインストールした場合は
+# options.binary_location = "/usr/bin/google-chrome-stable"
+
+# さらに、PATH 上の chromedriver を直接指定したい場合は
+# driver = webdriver.Chrome(executable_path="/usr/bin/chromedriver", options=options)
+
 driver = webdriver.Chrome(options=options)
 driver.implicitly_wait(5)
 
-driver.get('https://fujisawacity.service-now.com/facilities_reservation?id=facility_search') 
+# 以下は元々のスクレイピングロジックです
+driver.get('https://fujisawacity.service-now.com/facilities_reservation?id=facility_search')
 
 # 施設選択画面
 driver.find_element(By.CSS_SELECTOR,'#\\30 1_市民センター').click()
@@ -26,19 +36,17 @@ driver.find_element(By.CSS_SELECTOR,'#x28aa391893a70a1028bcbba32bba1071 > div.ma
 # 室場一覧を開く
 driver.find_element(By.CSS_SELECTOR,'#x28aa391893a70a1028bcbba32bba1071 > div.main-container > div.search-result.ng-scope > div > div > details > summary').click()
 
-# 空き情報を収集するためのリストを用意
 empties = [[], []]
 
 # 体育館A面
 driver.find_element(By.CSS_SELECTOR,'#x28aa391893a70a1028bcbba32bba1071 > div.main-container > div.search-result.ng-scope > div > div > details > div > div:nth-child(6) > p > a:nth-child(2)').click()
 driver.switch_to.window(driver.window_handles[0])
-
 # 体育館B面
 driver.find_element(By.CSS_SELECTOR,'#x28aa391893a70a1028bcbba32bba1071 > div.main-container > div.search-result.ng-scope > div > div > details > div > div:nth-child(7) > p > a:nth-child(2)').click()
 
 for x in range(2):
     driver.switch_to.window(driver.window_handles[x+1])
-    # 今週処理
+    # 今週の処理
     dt = datetime.today().date() - timedelta(days=3)
     day_name = ['(月)', '(火)', '(水)', '(木)', '(金)', '(土)', '(日)']
 
@@ -47,68 +55,60 @@ for x in range(2):
         mm = str(dt.month).zfill(2)
         dd = str(dt.day).zfill(2)
         day = day_name[dt.weekday()]
-        # OX判定
         try:
-            if driver.find_element(By.CSS_SELECTOR,f'#\\32 {yyy}-{mm}-{dd}_19\\:00-22\\:00').text == "O":
+            if driver.find_element(By.CSS_SELECTOR, f'#\\32 {yyy}-{mm}-{dd}_19\\:00-22\\:00').text == "O":
                 empties[x].append(f'{mm}/{dd}{day}')
         except Exception:
             pass
         dt = dt + timedelta(days=1)
 
-    # 以降、翌月以降の処理
+    # 翌月以降の処理
     for k in range(4):
-        dt = datetime.today().date() + relativedelta(months=k)
-        yyy = str(int(dt.year)-2000).zfill(3)
-        mm = str(dt.month).zfill(2)
+        dt2 = datetime.today().date() + relativedelta(months=k)
+        yyy = str(int(dt2.year)-2000).zfill(3)
+        mm = str(dt2.month).zfill(2)
         for i in range(1,7):
             try:
-                driver.find_element(By.CSS_SELECTOR,f'#datepicker > div > table > tbody > tr:nth-child({i}) > td:nth-child(4) > a').click()
+                driver.find_element(By.CSS_SELECTOR, f'#datepicker > div > table > tbody > tr:nth-child({i}) > td:nth-child(4) > a').click()
                 time.sleep(5)
-                d = int(driver.find_element(By.CSS_SELECTOR,f'#datepicker > div > table > tbody > tr:nth-child({i}) > td.ui-datepicker-current-day > a').text) - 3
+                d = int(driver.find_element(By.CSS_SELECTOR, f'#datepicker > div > table > tbody > tr:nth-child({i}) > td.ui-datepicker-current-day > a').text) - 3
                 for j in range(7):
                     dd = str(d + j).zfill(2)
                     day = day_name[(j+6)%7]
-                    # OX判定
                     try:
-                        if driver.find_element(By.CSS_SELECTOR,f'#\\32 {yyy}-{mm}-{dd}_19\\:00-22\\:00').text == "O":
+                        if driver.find_element(By.CSS_SELECTOR, f'#\\32 {yyy}-{mm}-{dd}_19\\:00-22\\:00').text == "O":
                             empties[x].append(f'{mm}/{dd}{day}')
                     except Exception:
                         pass
             except Exception:
                 try:
                     if i > 4:
-                        driver.find_element(By.CSS_SELECTOR,f'#datepicker > div > table > tbody > tr:nth-child({i}) > td:nth-child(1) > a').click()
-                        d = int(driver.find_element(By.CSS_SELECTOR,f'#datepicker > div > table > tbody > tr:nth-child({i}) > td.ui-datepicker-current-day > a').text)
+                        driver.find_element(By.CSS_SELECTOR, f'#datepicker > div > table > tbody > tr:nth-child({i}) > td:nth-child(1) > a').click()
+                        d = int(driver.find_element(By.CSS_SELECTOR, f'#datepicker > div > table > tbody > tr:nth-child({i}) > td.ui-datepicker-current-day > a').text)
                         for j in range(4):
                             dd = str(d + j).zfill(2)
                             day = day_name[(j+6)%7]
-                            # OX判定
                             try:
-                                if driver.find_element(By.CSS_SELECTOR,f'#\\32 {yyy}-{mm}-{dd}_19\\:00-22\\:00').text == "O":
+                                if driver.find_element(By.CSS_SELECTOR, f'#\\32 {yyy}-{mm}-{dd}_19\\:00-22\\:00').text == "O":
                                     empties[x].append(f'{mm}/{dd}{day}')
                             except Exception:
                                 pass
                 except Exception:
                     break
         try:
-            driver.find_element(By.CSS_SELECTOR,'#datepicker > div > div > a.ui-datepicker-next.ui-corner-all > span').click()
+            driver.find_element(By.CSS_SELECTOR, '#datepicker > div > div > a.ui-datepicker-next.ui-corner-all > span').click()
         except Exception:
             break
 
 driver.quit()
-# ──（ここまでが“現状のスクレイピング＋空き情報収集ロジック”）───────────────
 
+# ──（以下は前回比較→Discord 通知ロジック。変更不要）───
 
-# ──（以下、新規：前回メッセージと比較してDiscord通知）───────────────────
-
-# Discord の Webhook URL は環境変数から取得するほうが安全です。
-# GitHub Actions 上では「Settings > Secrets」に登録した SECRET_DISCORD_WEBHOOK を使う想定。
 discord_webhook_url = os.environ.get("SECRET_DISCORD_WEBHOOK")
 if not discord_webhook_url:
     print("ERROR: Discord Webhook URL が設定されていません。")
     exit(1)
 
-# 新しいメッセージを組み立て
 message_lines = []
 message_lines.append("A面")
 message_lines.extend(empties[0])
@@ -117,19 +117,15 @@ message_lines.append("B面")
 message_lines.extend(empties[1])
 new_message = "\n".join(message_lines)
 
-# 前回のメッセージを読み込む
 last_message = ""
 if os.path.exists("last_message.txt"):
     with open("last_message.txt", "r", encoding="utf-8") as f:
         last_message = f.read()
 
-# 差分があれば通知し、last_message.txt を更新
 if new_message != last_message:
-    payload = {"content": new_message}
-    res = requests.post(discord_webhook_url, json=payload)
-    if res.status_code == 204 or res.status_code == 200:
+    res = requests.post(discord_webhook_url, json={"content": new_message})
+    if res.status_code in (200, 204):
         print("Discord 通知を送信しました。")
-        # 成功したら last_message.txt を上書き
         with open("last_message.txt", "w", encoding="utf-8") as f:
             f.write(new_message)
     else:
