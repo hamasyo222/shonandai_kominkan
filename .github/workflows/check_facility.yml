@@ -1,11 +1,12 @@
+# .github/workflows/check_facility.yml
+
 name: 施設空き状況チェック＆Discord通知（6時間ごと）
 
-# 6時間に1回（0時、6時、12時、18時）の実行
+# ▼ 6時間に1回（UTCで 0:00, 06:00, 12:00, 18:00）実行
+# 日本時間に合わせたい場合は「UTC 15:00, 21:00, 03:00, 09:00」などにする必要があります。
 on:
   schedule:
     - cron: '0 */6 * * *'
-
-  # テスト的に手動実行したい場合
   workflow_dispatch:
 
 jobs:
@@ -13,45 +14,55 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1) リポジトリを取得
+      # 1. リポジトリをチェックアウト
       - name: リポジトリをチェックアウト
         uses: actions/checkout@v3
 
-      # 2) Python をセットアップ
+      # 2. Python をセットアップ
       - name: Python のセットアップ
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
 
-      # 3) Chrome と ChromeDriver をインストール
-      - name: Chrome と Chromedriver のインストール
-        run: |
-          sudo apt-get update
-          # Headless 動作可能な chromium-browser, chromedriver をインストール
-          sudo apt-get install -y chromium-browser chromium-chromedriver
-          # （場合によっては 'chromium-browser' の代わりに 'google-chrome-stable' を使うことも可能です）
+      # 3. Chrome（または Chromium）をセットアップ
+      #
+      #    ここでは「browser-actions/setup-chrome」を使い、Google Chrome をインストールし、
+      #    さらに「browser-actions/setup-chromedriver」で、Chrome のバージョンに適合する
+      #    Chromedriver を自動インストールします。
+      #
+      #    ※ もし「chromium-browser」を使いたい場合は apt-get で入れるパターンもありますが、
+      #       互換性の面でバージョンを合わせづらいので、公式の Chrome＋対応ドライバを入れるのが確実です。
+      #
+      - name: Google Chrome をインストール
+        uses: browser-actions/setup-chrome@v1
+        with:
+          chrome-version: 'latest'   # もしくは 'stable' など
 
-      # 4) Pythonライブラリ（selenium, requests, python-dateutil など）をインストール
+      - name: Chromedriver をインストール（Chrome と同じバージョン）
+        uses: browser-actions/setup-chromedriver@v2
+        with:
+          chrome-version: 'latest'   # 上記と同じバージョンを指定
+
+      # 4. Python ライブラリをインストール
       - name: 依存ライブラリをインストール
         run: |
           python -m pip install --upgrade pip
           pip install selenium requests python-dateutil
 
-      # 5) Discord Webhook URL を環境変数にセット
-      #    （GitHub の Settings → Secrets に "SECRET_DISCORD_WEBHOOK" を登録しておく）
-      - name: 環境変数を設定（Discord Webhook）
+      # 5. Discord Webhook の環境変数をセット
+      #    → 事前に GitHub リポジトリの Settings → Secrets で
+      #       「SECRET_DISCORD_WEBHOOK」を登録しておく
+      - name: Discord Webhook URL を環境変数にセット
         run: echo "SECRET_DISCORD_WEBHOOK=${{ secrets.SECRET_DISCORD_WEBHOOK }}" >> $GITHUB_ENV
 
-      # 6) スクリプトを実行 → last_message.txt と比較し、必要なら Discord 送信
+      # 6. check_availability.py を実行
       - name: 空き状況チェックスクリプトを実行
         run: |
           python check_availability.py
 
-      # 7) last_message.txt に変更があればコミット＆プッシュ
-      #    差分がある場合のみコミットするためには git-auto-commit-action を使う
+      # 7. last_message.txt に変更があればコミット＆プッシュ
       - name: 変更があれば last_message.txt をコミットしてプッシュ
         uses: stefanzweifel/git-auto-commit-action@v4
         with:
           commit_message: ':pencil: Update last_message.txt'
           file_pattern: 'last_message.txt'
-          # GITHUB_TOKEN を自動的に使ってコミット＆プッシュしてくれる
