@@ -6,7 +6,7 @@ name: 施設空き状況チェック＆Discord通知（6時間ごと）
 # 日本時間に合わせたい場合は「UTC 15:00, 21:00, 03:00, 09:00」などにする必要があります。
 on:
   schedule:
-    - cron: '0 * * * *'
+    - cron: '0 */3 * * *'
   workflow_dispatch:
 
 permissions:
